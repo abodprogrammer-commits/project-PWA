@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ماسح وموثق المستندات الذكي PWA Pro</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4f46e5">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- مكتبات QR, PDF, و OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12">
+
+  <!-- الهيدر العلوي -->
+  <header class="bg-indigo-600 text-white p-4 shadow-lg sticky top-0 z-40 flex justify-between items-center">
+    <div class="flex items-center gap-2">
+      <span class="text-2xl">📄</span>
+      <h1 class="font-bold text-lg">الماسح الذكي Pro</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btn-install-pwa" class="hidden bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold px-3 py-1.5 rounded-xl text-xs shadow-md transition-all animate-bounce">
+        📲 تثبيت التطبيق
+      </button>
+      <span id="pwa-status" class="text-xs bg-indigo-700 px-2.5 py-1 rounded-full text-indigo-100 font-semibold">أوفلاين جاهز</span>
+    </div>
+  </header>
+
+  <main class="max-w-xl mx-auto p-4 space-y-5">
+
+    <!-- بطاقة التحكم بالإشعارات والمزامنة -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="p-2 rounded-xl bg-amber-100 text-amber-600">🔔</div>
+        <div>
+          <h3 class="font-bold text-xs text-slate-800">التنبيهات والمزامنة</h3>
+          <p class="text-[10px] text-slate-400">إشعارات الحفظ والمزامنة السحابية</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-request-notif" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-1.5 px-2.5 rounded-xl transition-all">
+          التنبيهات
+        </button>
+        <button id="btn-sync-now" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold py-1.5 px-2.5 rounded-xl transition-all">
+          🔄 مزامنة
+        </button>
+      </div>
+    </div>
+
+    <!-- بطاقة حالة البطارية (الإضافة الجديدة) -->
+    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="p-2 rounded-xl bg-emerald-100 text-emerald-600">🔋</div>
+        <div>
+          <h3 class="font-bold text-xs text-slate-800">حالة البطارية</h3>
+          <p class="text-[10px] text-slate-400">مستوى شحن الجهاز الحالي</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="battery-level" class="font-bold text-sm text-emerald-600">--%</span>
+        <span id="battery-status" class="text-[10px] bg-slate-100 text-slate-600 font-semibold px-2 py-1 rounded-xl border border-slate-200">
+          جاري التحقق...
+        </span>
+      </div>
+    </div>
+
+    <!-- بطاقة الكاميرا والماسح الضوئي -->
+    <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-indigo-100 text-indigo-600">📸</div>
+          <div>
+            <h2 class="font-bold text-slate-800 text-base">الكاميرا والعدسة</h2>
+            <p class="text-xs text-slate-400">مسح المستندات وأكواد QR</p>
+          </div>
+        </div>
+        <span class="text-[10px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full font-bold">MediaStream</span>
+      </div>
+
+      <!-- عرض الكاميرا ومعاينتها -->
+      <div class="relative bg-slate-900 rounded-2xl overflow-hidden aspect-video flex items-center justify-center shadow-inner">
+        <video id="camera-feed" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+        <canvas id="snapshot-canvas" class="hidden"></canvas>
+        <div id="camera-placeholder" class="text-center text-slate-400 p-4">
+          <p class="text-3xl mb-1">📷</p>
+          <p class="text-xs">الكاميرا متوقفة حالياً</p>
+        </div>
+      </div>
+
+      <!-- أزرار التحكم بالكاميرا -->
+      <div class="grid grid-cols-2 gap-2">
+        <button id="btn-start-cam" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all">
+          🎬 تشغيل الكاميرا
+        </button>
+        <button id="btn-toggle-torch" disabled class="bg-slate-200 text-slate-400 cursor-not-allowed font-medium py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all">
+          💡 تشغيل الفلاش
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button id="btn-capture-doc" disabled class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all opacity-50 cursor-not-allowed">
+          📸 التقاط وثيقة
+        </button>
+        <button id="btn-scan-qr" disabled class="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all opacity-50 cursor-not-allowed">
+          🔍 قراءة QR
+        </button>
+      </div>
+
+      <!-- تصنيف وإدخال البيانات -->
+      <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+        <input type="text" id="doc-title-input" placeholder="عنوان المستند..." class="col-span-2 p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500">
+        <select id="doc-category-select" class="p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-semibold text-slate-600">
+          <option value="عام">📁 عام</option>
+          <option value="فواتير">🧾 فواتير</option>
+          <option value="شخصي">🆔 شخصي</option>
+          <option value="عمل">💼 عمل</option>
+        </select>
+      </div>
+
+      <!-- أدوات معالجة الصورة قبل التنسيق -->
+      <div class="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+        <p class="text-[11px] font-bold text-slate-600">🎨 أدوات فلترة الصورة المستهدفة:</p>
+        <div class="flex items-center justify-between gap-1 text-xs">
+          <button id="btn-filter-bw" class="bg-white border px-2.5 py-1 rounded-lg text-slate-700 hover:bg-slate-100">⚪/🖤 أبيض وأسود</button>
+          <button id="btn-filter-rotate" class="bg-white border px-2.5 py-1 rounded-lg text-slate-700 hover:bg-slate-100">🔄 تدوير 90°</button>
+          <button id="btn-filter-reset" class="bg-white border px-2.5 py-1 rounded-lg text-rose-600 hover:bg-rose-50">إلغاء الفلتر</button>
+        </div>
+      </div>
+
+      <!-- شريط الحالة -->
+      <div id="cam-status-msg" class="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200 min-h-[38px] flex items-center">
+        اضغط على "تشغيل الكاميرا" لبدء العمل.
+      </div>
+    </div>
+
+    <!-- بطاقة السجلات والأرشيف (IndexedDB + Categories) -->
+    <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-indigo-100 text-indigo-600">📂</div>
+          <div>
+            <h2 class="font-bold text-slate-800 text-base">الأرشيف والمستندات</h2>
+            <p class="text-xs text-slate-400">قاعدة البيانات المحلية</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="filter-category" class="text-xs bg-slate-100 p-1.5 rounded-lg border border-slate-200">
+            <option value="الكل">كل التصنيفات</option>
+            <option value="عام">عام</option>
+            <option value="فواتير">فواتير</option>
+            <option value="شخصي">شخصي</option>
+            <option value="عمل">عمل</option>
+          </select>
+          <button id="btn-clear-db" class="text-xs text-rose-500 hover:underline">مسح</button>
+        </div>
+      </div>
+
+      <!-- قائمة العناصر المحفوظة -->
+      <div id="records-container" class="space-y-2 max-h-96 overflow-y-auto pr-1">
+        <p class="text-xs text-slate-400 text-center py-4">جاري تحميل السجلات...</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- النافذة المنبثقة لمعاينة المستند والتعرف على النص (Modal Preview & OCR) -->
+  <div id="preview-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-lg rounded-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 id="modal-title" class="font-bold text-slate-800 text-base">معاينة المستند</h3>
+        <button id="btn-close-modal" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+      
+      <div id="modal-content-box" class="space-y-3">
+        <!-- سيتم حشو الصورة أو تفاصيل كود QR هنا -->
+      </div>
+
+      <!-- منطقة OCR واستخراج النص -->
+      <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-bold text-slate-700">🔍 استخراج النصوص (OCR):</span>
+          <button id="btn-run-ocr" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-3 py-1 rounded-lg">بدء التحليل OCR</button>
+        </div>
+        <textarea id="ocr-result-text" readonly class="w-full h-24 p-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none resize-none" placeholder="اضغط على زر الاستخراج للتحليل النصي..."></textarea>
+      </div>
+
+      <!-- أزرار الإجراءات المتكاملة (PDF, مشاركة, طباعة) -->
+      <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100">
+        <button id="modal-btn-pdf" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 rounded-xl">📄 تصدير PDF</button>
+        <button id="modal-btn-share" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-xl">📲 مشاركة</button>
+        <button id="modal-btn-print" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 rounded-xl">🖨️ طباعة</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
